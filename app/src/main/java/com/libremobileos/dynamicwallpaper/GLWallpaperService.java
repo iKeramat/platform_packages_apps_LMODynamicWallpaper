@@ -19,6 +19,7 @@ import android.service.wallpaper.WallpaperService;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.os.Handler;
 import android.os.Looper;
@@ -96,7 +97,7 @@ public class GLWallpaperService extends WallpaperService {
                     alpha += 0.2f; // Faster transition
                     if (alpha >= 1f) {
                         alpha = 1f;
-                        currentWallpaper = nextWallpaper; // Finish transition
+                        currentWallpaper = nextWallpaper;
                     } else {
                         handler.postDelayed(this, 1000 / 60); // 60 FPS smooth animation
                     }
@@ -109,15 +110,43 @@ public class GLWallpaperService extends WallpaperService {
             SurfaceHolder holder = getSurfaceHolder();
             Canvas canvas = holder.lockCanvas();
             if (canvas != null) {
-                if (currentWallpaper != null) {
-                    canvas.drawBitmap(currentWallpaper, 0, 0, null);
+                int screenWidth = canvas.getWidth();
+                int screenHeight = canvas.getHeight();
+
+                Bitmap scaledCurrent = (currentWallpaper != null) ? scaleCenterCrop(currentWallpaper, screenWidth, screenHeight) : null;
+                Bitmap scaledNext = (nextWallpaper != null) ? scaleCenterCrop(nextWallpaper, screenWidth, screenHeight) : null;
+
+                if (scaledCurrent != null) {
+                    canvas.drawBitmap(scaledCurrent, 0, 0, null);
                 }
-                if (nextWallpaper != null) {
-                    paint.setAlpha((int) (alpha * 255)); // Set alpha for smooth transition
-                    canvas.drawBitmap(nextWallpaper, 0, 0, paint);
+                if (scaledNext != null) {
+                    paint.setAlpha((int) (alpha * 255));
+                    canvas.drawBitmap(scaledNext, 0, 0, paint);
                 }
+
                 holder.unlockCanvasAndPost(canvas);
             }
+        }
+
+        private Bitmap scaleCenterCrop(Bitmap source, int newWidth, int newHeight) {
+            if (source == null) return null;
+
+            float scale;
+            float dx = 0, dy = 0;
+
+            if (source.getWidth() * newHeight > newWidth * source.getHeight()) {
+                scale = (float) newHeight / (float) source.getHeight();
+                dx = (newWidth - source.getWidth() * scale) * 0.5f;
+            } else {
+                scale = (float) newWidth / (float) source.getWidth();
+                dy = (newHeight - source.getHeight() * scale) * 0.5f;
+            }
+
+            Matrix matrix = new Matrix();
+            matrix.setScale(scale, scale);
+            matrix.postTranslate(dx, dy);
+
+            return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
         }
 
         private void startWallpaperUpdate() {
