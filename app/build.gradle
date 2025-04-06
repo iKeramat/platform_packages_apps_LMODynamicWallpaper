@@ -31,3 +31,9 @@ dependencies {
         exclude group: 'org.jetbrains.kotlin'
     }
 }
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
