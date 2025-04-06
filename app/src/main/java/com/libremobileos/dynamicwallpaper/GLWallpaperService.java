@@ -44,9 +44,10 @@ public class GLWallpaperService extends WallpaperService {
 
         // Define time periods
         private static final int MORNING_START = 6;
-        private static final int NOON_START = 12;
+        private static final int NOON_START = 11;
         private static final int AFTERNOON_START = 15;
-        private static final int NIGHT_START = 18;
+        private static final int EVENING_START = 17;
+        private static final int NIGHT_START = 20;
 
         @Override
         public void onSurfaceCreated(SurfaceHolder holder) {
@@ -66,8 +67,10 @@ public class GLWallpaperService extends WallpaperService {
                 nextWallpaperRes = R.drawable.morning;
             } else if (hourOfDay >= NOON_START && hourOfDay < AFTERNOON_START) {
                 nextWallpaperRes = R.drawable.noon;
-            } else if (hourOfDay >= AFTERNOON_START && hourOfDay < NIGHT_START) {
+            } else if (hourOfDay >= AFTERNOON_START && hourOfDay < EVENING_START) {
                 nextWallpaperRes = R.drawable.afternoon;
+            } else if (hourOfDay >= EVENING_START && hourOfDay < NIGHT_START) {
+                nextWallpaperRes = R.drawable.evening;
             } else {
                 nextWallpaperRes = R.drawable.night;
             }
@@ -86,6 +89,8 @@ public class GLWallpaperService extends WallpaperService {
                 return R.drawable.noon;
             if (currentWallpaper.sameAs(BitmapFactory.decodeResource(getResources(), R.drawable.afternoon)))
                 return R.drawable.afternoon;
+            if (currentWallpaper.sameAs(BitmapFactory.decodeResource(getResources(), R.drawable.evening)))
+                return R.drawable.evening;
             return R.drawable.night;
         }
 
