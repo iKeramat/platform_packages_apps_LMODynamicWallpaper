@@ -15,7 +15,6 @@
  */
 package com.libremobileos.dynamicwallpaper;
 
-import android.service.wallpaper.WallpaperService;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -23,6 +22,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.os.Handler;
 import android.os.Looper;
+import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
 
 import com.libremobileos.dynamicwallpaper.R;
@@ -37,16 +37,18 @@ public class GLWallpaperService extends WallpaperService {
     }
 
     private class GLEngine extends Engine {
-        private Handler handler = new Handler(Looper.getMainLooper());
+        private final Handler handler = new Handler(Looper.getMainLooper());
         private Bitmap currentWallpaper, nextWallpaper;
-        private float alpha = 0f; // Transition progress (0 = old wallpaper, 1 = new wallpaper)
-        private Paint paint = new Paint();
+        private float alpha = 0f;
+        private final Paint paint = new Paint();
 
-        // Define time periods
         private static final int MORNING_START = 6;
         private static final int NOON_START = 11;
         private static final int EVENING_START = 16;
         private static final int NIGHT_START = 20;
+
+        private int lastWidth = -1;
+        private int lastHeight = -1;
 
         @Override
         public void onSurfaceCreated(SurfaceHolder holder) {
@@ -55,12 +57,28 @@ public class GLWallpaperService extends WallpaperService {
             startWallpaperUpdate();
         }
 
+        @Override
+        public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            super.onSurfaceChanged(holder, format, width, height);
+
+            if (width != lastWidth || height != lastHeight) {
+                lastWidth = width;
+                lastHeight = height;
+                drawWallpaper();
+            }
+        }
+
+        @Override
+        public void onSurfaceDestroyed(SurfaceHolder holder) {
+            super.onSurfaceDestroyed(holder);
+            lastWidth = -1;
+            lastHeight = -1;
+        }
+
         private void setWallpaperBasedOnTime() {
-            // Get the current time of day
             Calendar calendar = Calendar.getInstance();
             int hourOfDay = calendar.get(Calendar.HOUR_OF_DAY);
 
-            // Determine the next wallpaper
             int nextWallpaperRes;
             if (hourOfDay >= MORNING_START && hourOfDay < NOON_START) {
                 nextWallpaperRes = R.drawable.morning;
@@ -94,12 +112,12 @@ public class GLWallpaperService extends WallpaperService {
             handler.post(new Runnable() {
                 @Override
                 public void run() {
-                    alpha += 0.2f; // Faster transition
+                    alpha += 0.2f;
                     if (alpha >= 1f) {
                         alpha = 1f;
                         currentWallpaper = nextWallpaper;
                     } else {
-                        handler.postDelayed(this, 1000 / 60); // 60 FPS smooth animation
+                        handler.postDelayed(this, 1000 / 60);
                     }
                     drawWallpaper();
                 }
@@ -110,11 +128,11 @@ public class GLWallpaperService extends WallpaperService {
             SurfaceHolder holder = getSurfaceHolder();
             Canvas canvas = holder.lockCanvas();
             if (canvas != null) {
-                int screenWidth = canvas.getWidth();
-                int screenHeight = canvas.getHeight();
+                int width = canvas.getWidth();
+                int height = canvas.getHeight();
 
-                Bitmap scaledCurrent = (currentWallpaper != null) ? scaleCenterCrop(currentWallpaper, screenWidth, screenHeight) : null;
-                Bitmap scaledNext = (nextWallpaper != null) ? scaleCenterCrop(nextWallpaper, screenWidth, screenHeight) : null;
+                Bitmap scaledCurrent = (currentWallpaper != null) ? scaleCenterCrop(currentWallpaper, width, height) : null;
+                Bitmap scaledNext = (nextWallpaper != null) ? scaleCenterCrop(nextWallpaper, width, height) : null;
 
                 if (scaledCurrent != null) {
                     canvas.drawBitmap(scaledCurrent, 0, 0, null);
@@ -129,24 +147,29 @@ public class GLWallpaperService extends WallpaperService {
         }
 
         private Bitmap scaleCenterCrop(Bitmap source, int newWidth, int newHeight) {
-            if (source == null) return null;
+            if (source == null || source.isRecycled()) return null;
 
-            float scale;
-            float dx = 0, dy = 0;
+            float scale = Math.max(
+                    (float) newWidth / source.getWidth(),
+                    (float) newHeight / source.getHeight()
+            );
 
-            if (source.getWidth() * newHeight > newWidth * source.getHeight()) {
-                scale = (float) newHeight / (float) source.getHeight();
-                dx = (newWidth - source.getWidth() * scale) * 0.5f;
-            } else {
-                scale = (float) newWidth / (float) source.getWidth();
-                dy = (newHeight - source.getHeight() * scale) * 0.5f;
-            }
+            float scaledWidth = scale * source.getWidth();
+            float scaledHeight = scale * source.getHeight();
+
+            float dx = (newWidth - scaledWidth) / 2;
+            float dy = (newHeight - scaledHeight) / 2;
 
             Matrix matrix = new Matrix();
             matrix.setScale(scale, scale);
             matrix.postTranslate(dx, dy);
 
-            return Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
+            Bitmap outputBitmap = Bitmap.createBitmap(newWidth, newHeight, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(outputBitmap);
+            Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+            canvas.drawBitmap(source, matrix, paint);
+
+            return outputBitmap;
         }
 
         private void startWallpaperUpdate() {
@@ -156,7 +179,7 @@ public class GLWallpaperService extends WallpaperService {
                     setWallpaperBasedOnTime();
                     startWallpaperUpdate();
                 }
-            }, 60000); // Check time every minute
+            }, 60000);
         }
     }
 }
